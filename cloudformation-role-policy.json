@@ -1,0 +1,19 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ec2:*",
+        "ds:*",
+        "ssm:GetParameter*",
+        "iam:PassRole",
+        "cloudformation:*",
+        "s3:*",
+        "logs:*",
+        "codestar-connections:*"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
