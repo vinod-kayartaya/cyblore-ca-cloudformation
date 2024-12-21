@@ -393,7 +393,6 @@
         "ImageId": "ami-0261755bbcb8c4a84",
         "SubnetId": { "Ref": "PublicSubnet" },
         "SecurityGroupIds": [{ "Ref": "EJBCASecurityGroup" }],
-        "AssociatePublicIpAddress": true,
         "UserData": {
           "Fn::Base64": {
             "Fn::Join": [
