@@ -1,0 +1,13 @@
+template-file-path: template.json
+parameters:
+  PrivateSubnet1CIDR: 10.0.1.0/24
+  DomainDNSName: corp.cyblore.com
+  VpcCIDR: 10.0.0.0/16
+  EnvironmentName: prod
+  PrivateSubnet2CIDR: 10.0.2.0/24
+  DomainNetBIOSName: CORP
+  DirectoryPassword: '****'
+  WindowsServerAMI: /aws/service/ami-windows-latest/Windows_Server-2022-English-Full-Base
+  InstanceType: t3.medium
+  DirectoryType: AWSManaged
+tags: {}
