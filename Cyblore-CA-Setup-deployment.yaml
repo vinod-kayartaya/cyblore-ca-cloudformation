@@ -1,21 +1,16 @@
-Parameters:
-  EnvironmentName:
-    Default: prod
-  VpcCIDR:
-    Default: 10.0.0.0/16
-  PrivateSubnet1CIDR:
-    Default: 10.0.1.0/24
-  PrivateSubnet2CIDR:
-    Default: 10.0.2.0/24
-  PublicSubnetCIDR:
-    Default: 10.0.3.0/24
-  InstanceType:
-    Default: t3.medium
-  DirectoryType:
-    Default: AWSManaged
-  DomainDNSName:
-    Default: corp.cyblore.com
-  DomainNetBIOSName:
-    Default: CYBLORE
-  DirectoryPassword:
-    Default: Cyblore123! 
+Resources:
+  CybloreCAStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: template.json
+      Parameters:
+        EnvironmentName: prod
+        VpcCIDR: 10.0.0.0/16
+        PrivateSubnet1CIDR: 10.0.1.0/24
+        PrivateSubnet2CIDR: 10.0.2.0/24
+        PublicSubnetCIDR: 10.0.3.0/24
+        InstanceType: t3.medium
+        DirectoryType: AWSManaged
+        DomainDNSName: corp.cyblore.com
+        DomainNetBIOSName: CYBLORE
+        DirectoryPassword: Cyblore123!
