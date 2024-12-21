@@ -1,0 +1,516 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Enterprise Microsoft CA Server Infrastructure",
+  "Parameters": {
+    "EnvironmentName": {
+      "Type": "String",
+      "Default": "prod",
+      "Description": "Environment name"
+    },
+    "VpcCIDR": {
+      "Type": "String",
+      "Default": "10.0.0.0/16",
+      "Description": "CIDR block for VPC"
+    },
+    "PrivateSubnet1CIDR": {
+      "Type": "String",
+      "Default": "10.0.1.0/24"
+    },
+    "PrivateSubnet2CIDR": {
+      "Type": "String",
+      "Default": "10.0.2.0/24"
+    },
+    "WindowsServerAMI": {
+      "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+      "Default": "/aws/service/ami-windows-latest/Windows_Server-2022-English-Full-Base"
+    },
+    "InstanceType": {
+      "Type": "String",
+      "Default": "t3.medium",
+      "AllowedValues": ["t3.medium", "t3.large", "t3.xlarge"],
+      "Description": "Instance type for CA servers. t3.medium (2 vCPU, 4GB RAM) recommended for POC"
+    },
+    "DirectoryType": {
+      "Type": "String",
+      "AllowedValues": ["AWSManaged", "SelfManaged"],
+      "Default": "AWSManaged"
+    },
+    "DomainDNSName": {
+      "Type": "String",
+      "Default": "corp.cyblore.com"
+    },
+    "DomainNetBIOSName": {
+      "Type": "String",
+      "Default": "CYBLORE"
+    },
+    "DirectoryPassword": {
+      "Type": "String",
+      "NoEcho": true
+    },
+    "PublicSubnetCIDR": {
+      "Type": "String",
+      "Default": "10.0.3.0/24",
+      "Description": "CIDR block for public subnet"
+    }
+  },
+
+  "Resources": {
+    "VPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": { "Ref": "VpcCIDR" },
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "${EnvironmentName}-cyblore-ca-vpc" }
+          },
+          {
+            "Key": "Description",
+            "Value": "VPC for Cyblore Enterprise CA Infrastructure"
+          }
+        ]
+      }
+    },
+
+    "PrivateSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": { "Ref": "VPC" },
+        "CidrBlock": { "Ref": "PrivateSubnet1CIDR" },
+        "AvailabilityZone": { "Fn::Select": [0, { "Fn::GetAZs": "" }] },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${EnvironmentName}-cyblore-ca-private-subnet-1"
+            }
+          },
+          {
+            "Key": "Description",
+            "Value": "Cyblore Private Subnet 1 for CA Infrastructure"
+          }
+        ]
+      }
+    },
+
+    "PrivateSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": { "Ref": "VPC" },
+        "CidrBlock": { "Ref": "PrivateSubnet2CIDR" },
+        "AvailabilityZone": { "Fn::Select": [1, { "Fn::GetAZs": "" }] },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${EnvironmentName}-cyblore-ca-private-subnet-2"
+            }
+          },
+          {
+            "Key": "Description",
+            "Value": "Cyblore Private Subnet 2 for CA Infrastructure"
+          }
+        ]
+      }
+    },
+
+    "ManagedAD": {
+      "Type": "AWS::DirectoryService::MicrosoftAD",
+      "Properties": {
+        "Name": { "Ref": "DomainDNSName" },
+        "Password": { "Ref": "DirectoryPassword" },
+        "Edition": "Standard",
+        "ShortName": { "Ref": "DomainNetBIOSName" },
+        "VpcSettings": {
+          "VpcId": { "Ref": "VPC" },
+          "SubnetIds": [
+            { "Ref": "PrivateSubnet1" },
+            { "Ref": "PrivateSubnet2" }
+          ]
+        }
+      }
+    },
+
+    "DomainControllerSG": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for Domain Controllers",
+        "VpcId": { "Ref": "VPC" },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${EnvironmentName}-cyblore-dc-security-group"
+            }
+          },
+          {
+            "Key": "Description",
+            "Value": "Cyblore Security Group for Domain Controllers"
+          }
+        ],
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 53,
+            "ToPort": 53,
+            "CidrIp": { "Ref": "VpcCIDR" }
+          },
+          {
+            "IpProtocol": "udp",
+            "FromPort": 53,
+            "ToPort": 53,
+            "CidrIp": { "Ref": "VpcCIDR" }
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 88,
+            "ToPort": 88,
+            "CidrIp": { "Ref": "VpcCIDR" }
+          },
+          {
+            "IpProtocol": "udp",
+            "FromPort": 88,
+            "ToPort": 88,
+            "CidrIp": { "Ref": "VpcCIDR" }
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 389,
+            "ToPort": 389,
+            "CidrIp": { "Ref": "VpcCIDR" }
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 636,
+            "ToPort": 636,
+            "CidrIp": { "Ref": "VpcCIDR" }
+          }
+        ]
+      }
+    },
+
+    "CertificateAuthoritySG": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for CA Servers",
+        "VpcId": { "Ref": "VPC" },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${EnvironmentName}-cyblore-ca-security-group"
+            }
+          },
+          {
+            "Key": "Description",
+            "Value": "Cyblore Security Group for Certificate Authority Servers"
+          }
+        ],
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 135,
+            "ToPort": 135,
+            "CidrIp": { "Ref": "VpcCIDR" }
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 445,
+            "ToPort": 445,
+            "CidrIp": { "Ref": "VpcCIDR" }
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 49152,
+            "ToPort": 65535,
+            "CidrIp": { "Ref": "VpcCIDR" }
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "CidrIp": { "Ref": "VpcCIDR" }
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 80,
+            "ToPort": 80,
+            "CidrIp": { "Ref": "VpcCIDR" }
+          }
+        ]
+      }
+    },
+
+    "RootCAInstance": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "InstanceType": { "Ref": "InstanceType" },
+        "ImageId": { "Ref": "WindowsServerAMI" },
+        "SubnetId": { "Ref": "PrivateSubnet1" },
+        "SecurityGroupIds": [{ "Ref": "CertificateAuthoritySG" }],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "${EnvironmentName}-cyblore-root-ca" }
+          },
+          {
+            "Key": "Description",
+            "Value": "Cyblore Root Certificate Authority Server"
+          },
+          {
+            "Key": "Role",
+            "Value": "RootCA"
+          }
+        ]
+      }
+    },
+
+    "SubordinateCAInstance": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "InstanceType": { "Ref": "InstanceType" },
+        "ImageId": { "Ref": "WindowsServerAMI" },
+        "SubnetId": { "Ref": "PrivateSubnet2" },
+        "SecurityGroupIds": [{ "Ref": "CertificateAuthoritySG" }],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "${EnvironmentName}-cyblore-subordinate-ca" }
+          },
+          {
+            "Key": "Description",
+            "Value": "Cyblore Subordinate Certificate Authority Server"
+          },
+          {
+            "Key": "Role",
+            "Value": "SubordinateCA"
+          }
+        ]
+      }
+    },
+
+    "InternetGateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "${EnvironmentName}-cyblore-igw" }
+          }
+        ]
+      }
+    },
+
+    "AttachGateway": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": { "Ref": "VPC" },
+        "InternetGatewayId": { "Ref": "InternetGateway" }
+      }
+    },
+
+    "PublicSubnet": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": { "Ref": "VPC" },
+        "CidrBlock": { "Ref": "PublicSubnetCIDR" },
+        "AvailabilityZone": { "Fn::Select": [0, { "Fn::GetAZs": "" }] },
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "${EnvironmentName}-cyblore-public-subnet" }
+          }
+        ]
+      }
+    },
+
+    "PublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": { "Ref": "VPC" },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "${EnvironmentName}-cyblore-public-rt" }
+          }
+        ]
+      }
+    },
+
+    "PublicRoute": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "AttachGateway",
+      "Properties": {
+        "RouteTableId": { "Ref": "PublicRouteTable" },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": { "Ref": "InternetGateway" }
+      }
+    },
+
+    "PublicSubnetRouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": { "Ref": "PublicSubnet" },
+        "RouteTableId": { "Ref": "PublicRouteTable" }
+      }
+    },
+
+    "EJBCASecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for EJBCA RA Server",
+        "VpcId": { "Ref": "VPC" },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "${EnvironmentName}-cyblore-ejbca-sg" }
+          }
+        ],
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 22,
+            "ToPort": 22,
+            "CidrIp": "0.0.0.0/0"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "CidrIp": "0.0.0.0/0"
+          }
+        ]
+      }
+    },
+
+    "EJBCAInstance": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "InstanceType": { "Ref": "InstanceType" },
+        "ImageId": "ami-0261755bbcb8c4a84",
+        "SubnetId": { "Ref": "PublicSubnet" },
+        "SecurityGroupIds": [{ "Ref": "EJBCASecurityGroup" }],
+        "AssociatePublicIpAddress": true,
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Join": [
+              "",
+              [
+                "#!/bin/bash\n",
+                "yum update -y\n",
+                "yum install -y docker python3-pip\n",
+                "pip3 install docker-compose\n",
+                "systemctl start docker\n",
+                "systemctl enable docker\n",
+                "mkdir -p /opt/ejbca\n",
+                "cat > /opt/ejbca/docker-compose.yml << 'EOL'\n",
+                "version: '3.8'\n",
+                "services:\n",
+                "  mariadb:\n",
+                "    image: mariadb:10.6\n",
+                "    container_name: ejbca-db\n",
+                "    restart: always\n",
+                "    environment:\n",
+                "      MYSQL_ROOT_PASSWORD: rootpass\n",
+                "      MYSQL_DATABASE: ejbca\n",
+                "      MYSQL_USER: ejbca\n",
+                "      MYSQL_PASSWORD: ejbca\n",
+                "    volumes:\n",
+                "      - mariadb_data:/var/lib/mysql\n",
+                "    networks:\n",
+                "      - ejbca-network\n",
+                "\n",
+                "  ejbca:\n",
+                "    image: keyfactor/ejbca-ce\n",
+                "    container_name: ejbca\n",
+                "    restart: always\n",
+                "    ports:\n",
+                "      - \"443:8443\"\n",
+                "    environment:\n",
+                "      - DATABASE_JDBC_URL=jdbc:mysql://mariadb:3306/ejbca\n",
+                "      - DATABASE_USER=ejbca\n",
+                "      - DATABASE_PASSWORD=ejbca\n",
+                "      - TLS_SETUP_ENABLED=true\n",
+                "    depends_on:\n",
+                "      - mariadb\n",
+                "    volumes:\n",
+                "      - ejbca_data:/mnt/persistent\n",
+                "    networks:\n",
+                "      - ejbca-network\n",
+                "\n",
+                "volumes:\n",
+                "  mariadb_data:\n",
+                "  ejbca_data:\n",
+                "\n",
+                "networks:\n",
+                "  ejbca-network:\n",
+                "    driver: bridge\n",
+                "EOL\n",
+                "\n",
+                "cd /opt/ejbca\n",
+                "docker-compose up -d\n"
+              ]
+            ]
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "${EnvironmentName}-cyblore-ejbca-ra" }
+          },
+          {
+            "Key": "Description",
+            "Value": "Cyblore EJBCA Registration Authority Server"
+          },
+          {
+            "Key": "Role",
+            "Value": "EJBCA-RA"
+          }
+        ]
+      }
+    }
+  },
+
+  "Outputs": {
+    "VpcId": {
+      "Description": "VPC ID",
+      "Value": { "Ref": "VPC" }
+    },
+    "RootCAInstanceId": {
+      "Description": "Root CA Instance ID",
+      "Value": { "Ref": "RootCAInstance" }
+    },
+    "SubordinateCAInstanceId": {
+      "Description": "Subordinate CA Instance ID",
+      "Value": { "Ref": "SubordinateCAInstance" }
+    },
+    "DirectoryId": {
+      "Description": "Directory ID (if using AWS Managed AD)",
+      "Value": { "Ref": "ManagedAD" }
+    },
+    "EJBCAInstanceId": {
+      "Description": "EJBCA Instance ID",
+      "Value": { "Ref": "EJBCAInstance" }
+    },
+    "EJBCAPublicIP": {
+      "Description": "EJBCA Public IP",
+      "Value": { "Fn::GetAtt": ["EJBCAInstance", "PublicIp"] }
+    },
+    "EJBCAUrl": {
+      "Description": "EJBCA Web Interface URL",
+      "Value": {
+        "Fn::Join": [
+          "",
+          [
+            "https://",
+            { "Fn::GetAtt": ["EJBCAInstance", "PublicDnsName"] },
+            "/ejbca"
+          ]
+        ]
+      }
+    }
+  }
+}
